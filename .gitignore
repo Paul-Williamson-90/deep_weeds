@@ -1,6 +1,6 @@
-.venv/
-.data/
-.models/
-.logs/
+./venv/
+./data/
+./models/
+./logs/
 .env
 scratchpad.ipynb
