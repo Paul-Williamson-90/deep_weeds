@@ -25,13 +25,15 @@ logging.basicConfig(
     ]
 )
 
+CWD = os.getcwd()
+
 # Define constants
 EPOCHS = 10
 PATIENCE = 5
 BEST_METRIC = "f1"
 MIN_OR_MAX = "max"
 OUTPUT_SIZE = (256, 256)
-LOG_LOCATION = "/Users/paul.williamson/weeds_dataset/logs/log.csv"
+LOG_LOCATION = f"{CWD}/logs/log.csv"
 
 def load_data(transform, root_dir, csv_file, batch_size):
     train_loader, test_loader = dataset_factory(
@@ -75,7 +77,7 @@ def objective(config):
         scheduler = LinearLR(optimizer, config["scheduling_alpha"])
 
         now = time.strftime("%Y-%m-%d_%H-%M-%S")
-        save_location = f"/Users/paul.williamson/weeds_dataset/models/{model.__class__.__name__}/{now}"
+        save_location = f"{CWD}/models/{model.__class__.__name__}/{now}"
         n = 1
         while os.path.exists(save_location):
             save_location += f"_{n}"
@@ -156,8 +158,8 @@ def main():
         "batch_size": tune.choice([8, 16, 32]),
         "gradient_accumulation_steps": tune.choice([1, 2, 4, 8]),
         "scheduling_alpha": tune.loguniform(1e-6, 1e-1),
-        "root_dir": tune.choice(["/Users/paul.williamson/weeds_dataset/"]),  
-        "csv_file": tune.choice(["/Users/paul.williamson/weeds_dataset/data/labels.csv"]), 
+        "root_dir": tune.choice([f"{CWD}/"]),  
+        "csv_file": tune.choice([f"{CWD}/data/labels.csv"]), 
     }
 
     algo = OptunaSearch()
