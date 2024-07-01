@@ -92,7 +92,7 @@ class Trainer:
             self.optimizer.step()
             self.optimizer.zero_grad()
         return loss.item()
-
+    
     def _epoch(
             self,
             n_epoch: int,
@@ -123,15 +123,27 @@ class Trainer:
     
         self._report(train_loss_out, val_loss, metrics)
 
+        metrics["train_loss"] = train_loss_out
+        metrics["val_loss"] = val_loss
+        metrics["n_epoch"] = n_epoch
+
         if self.early_stopping:
-            metrics["train_loss"] = train_loss_out
-            metrics["val_loss"] = val_loss
-            metrics["n_epoch"] = n_epoch
             self._early_stopping(metrics)
             if self.patience_counter >= self.patience:
                 stop_training = True
 
-        return stop_training
+        return stop_training, metrics
+    
+    def _eval_step(
+            self,
+            batch: dict,
+    ):
+        image = batch["image"].to(self.device)
+        label = batch["label"].to(self.device)
+        preds = self.model(image)
+        loss = self.loss_fn(preds, label)
+        pred_labels = self.model.output_activation(preds)
+        return loss.item(), label, pred_labels
 
     def _eval(
             self,
@@ -140,16 +152,22 @@ class Trainer:
         total_loss = 0
         all_preds = []
         all_labels = []
+        if self.verbose:
+            pbar = tqdm(
+                enumerate(self.test_loader), 
+                total=len(self.test_loader), 
+                desc="Validation", 
+                leave=False, 
+                position=1
+            )
         with torch.no_grad():
             for batch in self.test_loader:
-                image = batch["image"].to(self.device)
-                label = batch["label"].to(self.device)
-                preds = self.model(image)
-                loss = self.loss_fn(preds, label)
-                pred_labels = self.model.output_activation(preds)
-                total_loss += loss.item()
+                loss, label, pred_labels = self._eval_step(batch)
+                total_loss += loss
                 all_preds.append(pred_labels.cpu())
                 all_labels.append(label.cpu())
+                if self.verbose:
+                    pbar.update(1)
 
         all_preds = torch.cat(all_preds, dim=0)
         all_labels = torch.cat(all_labels, dim=0)
@@ -181,19 +199,24 @@ class Trainer:
 
     def _save_best_metrics(
             self,
-            metrics: dict[str, float]
     ):
-        self.best_metrics = metrics
-        now = time.strftime("%Y-%m-%d %H:%M:%S")
-        if os.path.exists(self.training_log):
-            log = pd.read_csv(self.training_log)
-        else:
-            log = pd.DataFrame()
-        metrics["timestamp"] = now
-        for key in self.additional_reporting:
-            metrics[key] = self.additional_reporting[key]
-        log = pd.concat([log, pd.Series(metrics)], axis=0).reset_index(drop=True)
-        log.to_csv(self.training_log, index=False)
+        if self.best_metrics:
+            now = time.strftime("%Y-%m-%d %H:%M:%S")
+            if os.path.exists(self.training_log):
+                log = pd.read_csv(self.training_log)
+            else:
+                log = pd.DataFrame()
+            self.best_metrics["timestamp"] = now
+            for key in self.additional_reporting:
+                self.best_metrics[key] = self.additional_reporting[key]
+            log = pd.concat(
+                [
+                    log, 
+                    pd.DataFrame({k:[v] for k,v in self.best_metrics.items()})
+                ], 
+                axis=0
+            ).reset_index(drop=True)
+            log.to_csv(self.training_log, index=False)
 
 
     def _save_model(
@@ -230,15 +253,15 @@ class Trainer:
             metrics: dict[str, float]
     ):
         if self.verbose:
-            text = ""
-            text += "="*50
+            text = "\n"
+            text += "="*100
             text += f"\nTrain Loss: {train_loss_out:.4f} | "
             text += f"Val Loss: {val_loss:.4f} | "
             text += f"Accuracy: {metrics['acc']:.4f} | "
             text += f"Precision: {metrics['precision']:.4f} | "
             text += f"Recall: {metrics['recall']:.4f} | "
             text += f"F1: {metrics['f1']:.4f}\n"
-            text += "="*50
+            text += "="*100
             logger.info(text)
 
     def train(
@@ -251,11 +274,11 @@ class Trainer:
         try:
             for epoch in range(self.n_epochs):
                 logger.info(f"Epoch {epoch+1}/{self.n_epochs}")
-                stop_training = self._epoch(epoch+1)
+                stop_training, _ = self._epoch(epoch+1)
                 if stop_training:
                     break
         except KeyboardInterrupt:
             logger.info("Training stopped by user")
         finally:
             if self.best_metrics:
-                self._save_best_metrics(self.best_metrics)
+                self._save_best_metrics()
