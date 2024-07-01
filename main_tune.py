@@ -13,7 +13,7 @@ from ray.tune.search.optuna import OptunaSearch
 from src.utils import dataset_factory
 from src.trainer import Trainer
 from src.transform import ImageTransform
-from src.model import SimpleCNN
+from src.model import SimpleCNN, ResNet
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ logging.basicConfig(
 CWD = os.getcwd()
 
 # Define constants
-EPOCHS = 10
+EPOCHS = 50
 PATIENCE = 5
 BEST_METRIC = "f1"
 MIN_OR_MAX = "max"
@@ -126,6 +126,7 @@ def objective(config):
             for epoch in range(trainer.n_epochs):
                 stop_training, metrics = trainer._epoch(epoch + 1)
                 train.report(metrics)
+            break
         trainer._save_best_metrics()
     except Exception:
         train.report({
