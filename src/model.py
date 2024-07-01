@@ -105,10 +105,8 @@ class SimpleCNN(nn.Module):
         x = F.relu(self.conv2(x)) 
         x = self.pool(x) 
         x = x.view(x.size(0), -1)
-        x = self.fc1(x) 
-        x = F.relu(x) 
-        x = self.fc2(x) 
-        x = F.relu(x) 
+        x = F.relu(self.fc1(x)) 
+        x = F.relu(self.fc2(x)) 
         x = self.fc3(x) 
         return x
     
