@@ -18,7 +18,7 @@ _LOG_LOCATION = "./logs/log.csv"
 
 EPOCHS = 10
 BATCH_SIZE = 16
-LEARNING_RATE = 1e-3
+LEARNING_RATE = 1e-2
 SCHEDULER_ALPHA = 0.1
 GRADIENT_ACCUMULATION_STEPS = 1
 EARLY_STOPPING = True
@@ -77,7 +77,7 @@ def main():
         "model": model.__class__.__name__,
         "optimizer": optimizer.__class__.__name__,
         "loss_fn": loss_fn.__class__.__name__,
-        "scheduler": scheduler.__class__.__name__,
+        "scheduler": scheduler.__class__.__name__ if scheduler else None,
         "scheduler_alpha": SCHEDULER_ALPHA,
         "batch_size": BATCH_SIZE,
         "learning_rate": LEARNING_RATE,
@@ -108,7 +108,6 @@ def main():
         min_or_max=MIN_OR_MAX,
         verbose=VERBOSE,
         additional_reporting=additional_reporting,
-        device="cpu"
     )
 
     trainer.train()
