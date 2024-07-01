@@ -9,7 +9,7 @@ class ImageTransform:
             self,
             output_size: tuple[int, int],
             rescale: bool = True,
-            random_crop: bool = True,
+            random_crop: bool|float = 0.2,
             to_tensor: bool = True,
         ):
         self.rescale = rescale
@@ -68,7 +68,11 @@ class ImageTransform:
         if self.rescale:
             sample = self._rescale(sample)
         if self.random_crop:
-            sample = self._random_crop(sample)
+            if isinstance(self.random_crop, float):
+                if np.random.rand() < self.random_crop:
+                    sample = self._random_crop(sample)
+            else:
+                sample = self._random_crop(sample)
         if self.to_tensor:
             sample = self._to_tensor(sample)
         return sample
