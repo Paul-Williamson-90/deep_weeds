@@ -1,0 +1,6 @@
+.venv/
+.data/
+.models/
+.logs/
+.env
+scratchpad.ipynb
