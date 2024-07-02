@@ -14,7 +14,9 @@ class ResNetBlock(nn.Module):
             stride:int, 
             padding:int,
             layers:int = 2,
-            connection:str = "loose"
+            connection:str = "loose",
+            pool_kernel_size:int = 2,
+            pool_stride:int = 2,
         ):
         super(ResNetBlock, self).__init__()
         self.connection = connection
@@ -31,6 +33,10 @@ class ResNetBlock(nn.Module):
             for _ in range(layers)
         ])
         self.relu = nn.ReLU()
+        self.pool = nn.MaxPool2d(
+            kernel_size=pool_kernel_size,
+            stride=pool_stride
+        )
 
     def forward(self, x):
         if self.connection == "tight":
@@ -52,6 +58,7 @@ class ResNetBlock(nn.Module):
                     x = self.conv[i](x)
                     x = self.batch_norm[i](x)
                     x = self.relu(x)
+        x = self.pool(x)
         return x
     
 class ResNet(nn.Module):
@@ -60,82 +67,59 @@ class ResNet(nn.Module):
             self,
             n_classes: int = 3,
             image_input_shape: tuple|list = (256, 256),
-            conv1_in_channels: int = 3,
-            conv1_out_channels: int = 6,
-            conv1_kernel_size: int = 5,
-            conv1_stride: int = 1,
-            conv1_padding_size: int = 0,
-            conv2_out_channels: int = 16,
-            conv2_kernel_size: int = 5,
-            conv2_padding_size: int = 0,
-            conv2_stride: int = 1,
+            resnet_blocks: int = 2,
+            resnet_in_channels: list[int] = [3, 6],
+            resnet_out_channels: list[int] = [6, 16],
+            resnet_kernel_sizes: list[int] = [5, 5],
+            resnet_strides: list[int] = [1, 1],
+            resnet_padding_sizes: list[int] = [0, 0],
+            resnet_layers: list[int] = [2, 2],
+            resnet_connection: list[str] = ["loose", "loose"],
             pool_kernel_size: int = 2,
             pool_stride: int = 2,
             fc1_output_dims: int = 120,
             fc2_output_dims: int = 84,
         ):
         super(ResNet, self).__init__()
-        self.conv1 = nn.Conv2d(
-            in_channels=conv1_in_channels,
-            out_channels=conv1_out_channels,
-            kernel_size=conv1_kernel_size,
-            padding=conv1_padding_size,
-            stride=conv1_stride
-        )
-        output_size = self._calculate_output_size_conv(
+        self.resnet_blocks = nn.ModuleList([ResNetBlock(
+            in_channels=resnet_in_channels[i],
+            out_channels=resnet_out_channels[i],
+            kernel_size=resnet_kernel_sizes[i],
+            padding=resnet_padding_sizes[i],
+            stride=resnet_strides[i],
+            layers=resnet_layers[i],
+            connection=resnet_connection[i],
+            pool_kernel_size=pool_kernel_size,
+            pool_stride=pool_stride
+        ) for i in range(resnet_blocks)])
+
+        output_size = self._calculate_output_size_flow(
             input_size=image_input_shape[0],
-            kernel_size=conv1_kernel_size,
-            padding_size=conv1_padding_size,
-            stride=conv1_stride
+            resnet_blocks=resnet_blocks,
+            resnet_kernel_sizes=resnet_kernel_sizes,
+            resnet_strides=resnet_strides,
+            resnet_padding_sizes=resnet_padding_sizes,
+            resnet_layers=resnet_layers,
+            pool_kernel_size=pool_kernel_size,
+            pool_stride=pool_stride
         )
+        fc1_input_dims = resnet_out_channels[-1] * output_size * output_size
 
-        self.pool = nn.MaxPool2d(
-            kernel_size=pool_kernel_size,
-            stride=pool_stride
-        )
-        output_size = self._calculate_output_size_pool(
-            input_size=output_size,
-            kernel_size=pool_kernel_size,
-            stride=pool_stride
-        )
-
-        self.resnet_block = ResNetBlock(
-            in_channels=conv1_out_channels,
-            out_channels=conv2_out_channels,
-            kernel_size=conv2_kernel_size,
-            padding=conv2_padding_size,
-            stride=conv2_stride
-        )
-        output_size = self._calculate_output_size_conv(
-            input_size=output_size,
-            kernel_size=conv2_kernel_size,
-            padding_size=conv2_padding_size,
-            stride=conv2_stride
-        )
-        output_size = self._calculate_output_size_pool(
-            input_size=output_size,
-            kernel_size=pool_kernel_size,
-            stride=pool_stride
-        )
-
-        self.fc1_input_dims = conv2_out_channels * output_size * output_size
-
-        self.fc1 = nn.Linear(self.fc1_input_dims, fc1_output_dims)
+        self.fc1 = nn.Linear(fc1_input_dims, fc1_output_dims)
         self.fc2 = nn.Linear(fc1_output_dims, fc2_output_dims)
         self.fc3 = nn.Linear(fc2_output_dims, n_classes)
         self.output_activation = nn.Softmax(dim=1)
         self.config = {
             "n_classes": n_classes,
             "image_input_shape": image_input_shape,
-            "conv1_in_channels": conv1_in_channels,
-            "conv1_out_channels": conv1_out_channels,
-            "conv1_kernel_size": conv1_kernel_size,
-            "conv1_padding_size": conv1_padding_size,
-            "conv1_stride": conv1_stride,
-            "conv2_out_channels": conv2_out_channels,
-            "conv2_kernel_size": conv2_kernel_size,
-            "conv2_padding_size": conv2_padding_size,
-            "conv2_stride": conv2_stride,
+            "resnet_blocks": resnet_blocks,
+            "resnet_in_channels": resnet_in_channels,
+            "resnet_out_channels": resnet_out_channels,
+            "resnet_kernel_sizes": resnet_kernel_sizes,
+            "resnet_strides": resnet_strides,
+            "resnet_padding_sizes": resnet_padding_sizes,
+            "resnet_layers": resnet_layers,
+            "resnet_connection": resnet_connection,
             "pool_kernel_size": pool_kernel_size,
             "pool_stride": pool_stride,
             "fc1_output_dims": fc1_output_dims,
@@ -148,12 +132,37 @@ class ResNet(nn.Module):
     def _calculate_output_size_pool(self, input_size, kernel_size, stride):
         return ((input_size - kernel_size) // stride) + 1
     
+    def _calculate_output_size_flow(
+            self, 
+            input_size,
+            resnet_blocks,
+            resnet_kernel_sizes,
+            resnet_strides,
+            resnet_padding_sizes,
+            resnet_layers,
+            pool_kernel_size,
+            pool_stride
+        ):
+        output_size = input_size
+        for i in range(resnet_blocks):
+            for j in range(resnet_layers[i]):
+                output_size = self._calculate_output_size_conv(
+                    input_size=output_size,
+                    kernel_size=resnet_kernel_sizes[i],
+                    padding_size=resnet_padding_sizes[i],
+                    stride=resnet_strides[i]
+                )
+            output_size = self._calculate_output_size_pool(
+                input_size=output_size,
+                kernel_size=pool_kernel_size,
+                stride=pool_stride
+            )
+        return output_size
+    
     def forward(self, x):
         x = x / 255.0
-        x = F.relu(self.conv1(x))
-        x = self.pool(x)
-        x = self.resnet_block(x)
-        x = self.pool(x)
+        for block in self.resnet_blocks:
+            x = block(x)
         x = x.view(x.size(0), -1)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
