@@ -46,7 +46,7 @@ def load_data(transform, root_dir, csv_file, batch_size):
     return train_loader, test_loader, n_classes
 
 def objective(config):
-    try:
+    # try:
         transform = ImageTransform(OUTPUT_SIZE)
         root_dir = config["root_dir"]
         csv_file = config["csv_file"]
@@ -54,22 +54,37 @@ def objective(config):
 
         train_loader, test_loader, n_classes = load_data(transform, root_dir, csv_file, batch_size)
 
-        model = SimpleCNN(
+        # model = SimpleCNN(
+        #     n_classes=n_classes,
+        #     image_input_shape=OUTPUT_SIZE,
+        #     conv1_in_channels=3,
+        #     conv1_out_channels=config["conv1_out_channels"],
+        #     conv1_kernel_size=config["conv1_kernel_size"],
+        #     conv1_stride=config["conv1_stride"],
+        #     conv1_padding_size=config["conv1_padding_size"],
+        #     conv2_out_channels=config["conv2_out_channels"],
+        #     conv2_kernel_size=config["conv2_kernel_size"],
+        #     conv2_padding_size=config["conv2_padding_size"],
+        #     conv2_stride=config["conv2_stride"],
+        #     pool_kernel_size=config["pool_kernel_size"],
+        #     pool_stride=config["pool_stride"],
+        #     fc1_output_dims=config["fc1_output_dims"],
+        #     fc2_output_dims=config["fc2_output_dims"]
+        # )
+        model = ResNet(
             n_classes=n_classes,
             image_input_shape=OUTPUT_SIZE,
-            conv1_in_channels=3,
-            conv1_out_channels=config["conv1_out_channels"],
-            conv1_kernel_size=config["conv1_kernel_size"],
-            conv1_stride=config["conv1_stride"],
-            conv1_padding_size=config["conv1_padding_size"],
-            conv2_out_channels=config["conv2_out_channels"],
-            conv2_kernel_size=config["conv2_kernel_size"],
-            conv2_padding_size=config["conv2_padding_size"],
-            conv2_stride=config["conv2_stride"],
-            pool_kernel_size=config["pool_kernel_size"],
-            pool_stride=config["pool_stride"],
+            input_channels=3,
+            resnet_blocks=config["resnet_blocks"],
+            resnet_channels=[config["resnet_channels"][i] for i in range(config["resnet_blocks"])],
+            resnet_kernel_sizes=[config["resnet_kernel_sizes"][i] for i in range(config["resnet_blocks"])],
+            resnet_strides=[1 for _ in range(config["resnet_blocks"])],
+            resnet_padding_sizes=[0 for _ in range(config["resnet_blocks"])],
+            resnet_layers=[config["resnet_layers"][i] for i in range(config["resnet_blocks"])],
             fc1_output_dims=config["fc1_output_dims"],
-            fc2_output_dims=config["fc2_output_dims"]
+            fc2_output_dims=config["fc2_output_dims"],
+            pool_kernel_size=2,
+            pool_stride=2
         )
 
         optimizer = Adam(model.parameters(), lr=config["lr"])
@@ -126,33 +141,34 @@ def objective(config):
             for epoch in range(trainer.n_epochs):
                 stop_training, metrics = trainer._epoch(epoch + 1)
                 train.report(metrics)
+                if stop_training:
+                     break
             break
         trainer._save_best_metrics()
-    except Exception:
-        train.report({
-            "train_loss": float("inf"),
-            "val_loss": float("inf"),
-            "n_epoch": 0,
-            "f1": 0.0,
-            "acc": 0.0,
-            "precision": 0.0,
-            "recall": 0.0,
-        })
-        if os.path.exists(save_location):
-            os.rmdir(save_location)
+        train.report(trainer.best_metrics)
+    # except Exception:
+    #     train.report({
+    #         "train_loss": float("inf"),
+    #         "val_loss": float("inf"),
+    #         "n_epoch": 0,
+    #         "f1": 0.0,
+    #         "acc": 0.0,
+    #         "precision": 0.0,
+    #         "recall": 0.0,
+    #     })
+    #     if os.path.exists(save_location):
+    #         os.rmdir(save_location)
 
 def main():
-    search_space = {
-        "conv1_out_channels": tune.choice([12, 24, 48]),
-        "conv1_kernel_size": tune.choice([5, 10, 15]),
-        "conv1_padding_size": tune.choice([0, 5, 10]),
-        "conv1_stride": tune.choice([1, 2, 5]),
-        "conv2_out_channels": tune.choice([6, 12, 24]),
-        "conv2_kernel_size": tune.choice([5, 10, 15]),
-        "conv2_padding_size": tune.choice([0, 5, 10]),
-        "conv2_stride": tune.choice([1, 2, 5]),
-        "pool_kernel_size": tune.choice([5, 10, 15]),
-        "pool_stride": tune.choice([1, 2, 5]),
+    search_space = { # ResNet
+        "resnet_blocks": tune.choice([1, 2]),
+        "resnet_channels": tune.choice([[6, 12], [12, 24], [24, 48]]),
+        "resnet_kernel_sizes": tune.choice(
+            [
+                  [5, 1],[5, 3],[5, 2], [4, 3], [4, 2], [4, 1], [3, 2], [3, 1], [2, 1], [1, 1], [2, 2], [2, 3], [3, 3]
+            ]
+        ),
+        "resnet_layers": tune.choice([[1, 1],[1, 2], [2, 1], [2, 2]]),
         "fc1_output_dims": tune.choice([64, 128, 256]),
         "fc2_output_dims": tune.choice([64, 128, 256]),
         "lr": tune.loguniform(1e-6, 1e-1),
@@ -162,6 +178,26 @@ def main():
         "root_dir": tune.choice([f"{CWD}/"]),  
         "csv_file": tune.choice([f"{CWD}/data/labels.csv"]), 
     }
+    # search_space = { # SimpleCNN
+    #     "conv1_out_channels": tune.choice([12, 24, 48]),
+    #     "conv1_kernel_size": tune.choice([5, 10, 15]),
+    #     "conv1_padding_size": tune.choice([0, 5, 10]),
+    #     "conv1_stride": tune.choice([1, 2, 5]),
+    #     "conv2_out_channels": tune.choice([6, 12, 24]),
+    #     "conv2_kernel_size": tune.choice([5, 10, 15]),
+    #     "conv2_padding_size": tune.choice([0, 5, 10]),
+    #     "conv2_stride": tune.choice([1, 2, 5]),
+    #     "pool_kernel_size": tune.choice([5, 10, 15]),
+    #     "pool_stride": tune.choice([1, 2, 5]),
+    #     "fc1_output_dims": tune.choice([64, 128, 256]),
+    #     "fc2_output_dims": tune.choice([64, 128, 256]),
+    #     "lr": tune.loguniform(1e-6, 1e-1),
+    #     "batch_size": tune.choice([8, 16, 32]),
+    #     "gradient_accumulation_steps": tune.choice([1, 2, 4, 8]),
+    #     "scheduling_alpha": tune.loguniform(1e-6, 1e-1),
+    #     "root_dir": tune.choice([f"{CWD}/"]),  
+    #     "csv_file": tune.choice([f"{CWD}/data/labels.csv"]), 
+    # }
 
     algo = OptunaSearch()
 
