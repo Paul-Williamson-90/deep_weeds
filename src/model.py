@@ -12,35 +12,46 @@ class ResNetBlock(nn.Module):
             out_channels:int, 
             kernel_size:int, 
             stride:int, 
-            padding:int
+            padding:int,
+            layers:int = 2,
+            connection:str = "loose"
         ):
         super(ResNetBlock, self).__init__()
-        self.conv1 = nn.Conv2d(
+        self.connection = connection
+        self.layers = layers
+        self.conv = nn.ModuleList([nn.Conv2d(
             in_channels=in_channels,
             out_channels=out_channels,
             kernel_size=kernel_size,
             stride=stride,
             padding=padding
-        )
-        self.conv2 = nn.Conv2d(
-            in_channels=out_channels,
-            out_channels=out_channels,
-            kernel_size=kernel_size,
-            stride=stride,
-            padding=padding
-        )
+        ) for _ in range(layers)])
+        self.batch_norm = nn.ModuleList([
+            nn.BatchNorm2d(out_channels) 
+            for _ in range(layers)
+        ])
         self.relu = nn.ReLU()
-        self.batch_norm = nn.BatchNorm2d(out_channels)
 
     def forward(self, x):
-        identity = x
-        x = self.conv1(x)
-        x = self.batch_norm(x)
-        x = self.relu(x)
-        x = self.conv2(x)
-        x = self.batch_norm(x)
-        x += identity
-        x = self.relu(x)
+        if self.connection == "tight":
+            for i in range(self.layers):
+                identity = x
+                x = self.conv[i](x)
+                x = self.batch_norm[i](x)
+                x += identity
+                x = self.relu(x)
+        elif self.connection == "loose":
+            identity = x
+            for i in range(self.layers):
+                if i == self.layers - 1:
+                    x = self.conv[i](x)
+                    x = self.batch_norm[i](x)
+                    x += identity
+                    x = self.relu(x)
+                else:
+                    x = self.conv[i](x)
+                    x = self.batch_norm[i](x)
+                    x = self.relu(x)
         return x
     
 class ResNet(nn.Module):
