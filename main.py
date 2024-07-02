@@ -9,18 +9,18 @@ from torch.optim.lr_scheduler import LinearLR
 from src.utils import dataset_factory
 from src.trainer import Trainer
 from src.transform import ImageTransform
-from src.model import SimpleCNN
+from src.model import ResNet
 
 
 _ROOT_DIR = "./"
 _CSV_FILE = "./data/labels.csv"
 _LOG_LOCATION = "./logs/log.csv"
 
-EPOCHS = 10
-BATCH_SIZE = 16
-LEARNING_RATE = 1e-2
-SCHEDULER_ALPHA = 0.1
-GRADIENT_ACCUMULATION_STEPS = 1
+EPOCHS = 50
+BATCH_SIZE = 32
+LEARNING_RATE = 6.255533209074749e-05
+SCHEDULER_ALPHA = 0.00036720508404985644
+GRADIENT_ACCUMULATION_STEPS = 2
 EARLY_STOPPING = True
 PATIENCE = 5
 BEST_METRIC = "val_loss"
@@ -28,7 +28,7 @@ MIN_OR_MAX = "min"
 VERBOSE = True
 
 TRANSFORM = True
-OUTPUT_SIZE = (256, 256)
+OUTPUT_SIZE = (255, 255)
 
 def main():
     if TRANSFORM:
@@ -45,22 +45,21 @@ def main():
     
     n_classes = pd.read_csv(_CSV_FILE)["Label"].nunique()
 
-    model = SimpleCNN(
+    model = ResNet(
         n_classes=n_classes,
         image_input_shape=OUTPUT_SIZE,
-        conv1_in_channels=3,
-        conv1_out_channels=6,
-        conv1_kernel_size=5,
-        conv1_stride=1,
-        conv1_padding_size=0,
-        conv2_out_channels=16,
-        conv2_kernel_size=5,
-        conv2_padding_size=0,
-        conv2_stride=1,
+        input_channels=3,
+        resnet_blocks=2,
+        resnet_channels=[24, 48],
+        resnet_kernel_sizes=[5, 3],
+        resnet_strides=[1, 1],
+        resnet_padding_sizes=[0, 0],
+        resnet_layers=[2, 2],
+        fc1_output_dims=128,
+        fc2_output_dims=128,
         pool_kernel_size=2,
         pool_stride=2,
-        fc1_output_dims=120,
-        fc2_output_dims=84
+        dropout=0.2,
     )
     optimizer = Adam(model.parameters(), lr=LEARNING_RATE)
     loss_fn = nn.CrossEntropyLoss()
