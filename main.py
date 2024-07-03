@@ -9,7 +9,7 @@ from torch.optim.lr_scheduler import LinearLR
 from src.utils import dataset_factory
 from src.trainer import Trainer
 from src.transform import ImageTransform
-from src.model import ResNet
+from src.model import ResNet, ViTTransformer
 
 
 _ROOT_DIR = "./"
@@ -45,21 +45,30 @@ def main():
     
     n_classes = pd.read_csv(_CSV_FILE)["Label"].nunique()
 
-    model = ResNet(
+    # model = ResNet(
+    #     n_classes=n_classes,
+    #     image_input_shape=OUTPUT_SIZE,
+    #     input_channels=3,
+    #     resnet_blocks=2,
+    #     resnet_channels=[64, 38],
+    #     resnet_kernel_sizes=[5, 3],
+    #     resnet_strides=[1, 1],
+    #     resnet_padding_sizes=[0, 0],
+    #     resnet_layers=[1, 2],
+    #     fc1_output_dims=128,
+    #     fc2_output_dims=128,
+    #     pool_kernel_size=2,
+    #     pool_stride=2,
+    #     dropout=0.,
+    # )
+    model = ViTTransformer(
         n_classes=n_classes,
-        image_input_shape=OUTPUT_SIZE,
         input_channels=3,
-        resnet_blocks=2,
-        resnet_channels=[64, 38],
-        resnet_kernel_sizes=[5, 3],
-        resnet_strides=[1, 1],
-        resnet_padding_sizes=[0, 0],
-        resnet_layers=[1, 2],
-        fc1_output_dims=128,
-        fc2_output_dims=128,
-        pool_kernel_size=2,
-        pool_stride=2,
-        dropout=0.,
+        image_input_shape=OUTPUT_SIZE,
+        n_patches=17,
+        hidden_d=512,
+        n_heads=32,
+        dropout=0.1,
     )
     optimizer = Adam(model.parameters(), lr=LEARNING_RATE)
     loss_fn = nn.CrossEntropyLoss()

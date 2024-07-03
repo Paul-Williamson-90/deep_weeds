@@ -175,7 +175,7 @@ def main():
         "hidden_d_num_heads": tune.choice(
             [[64, 8], [128, 8], [256, 8], [512, 8], [64, 16], [128, 16], [256, 16], [512, 16], [64, 32], [128, 32], [256, 32], [512, 32]]
         ),
-        "n_patches": tune.choice([5, 15, 17, 51, 85]),
+        "n_patches": tune.choice([5, 15, 17,]), #51, 85]),
         "dropout": tune.uniform(0., 0.5),
         "lr": tune.loguniform(1e-6, 1e-1),
         "batch_size": tune.choice([8, 16, 32]),
