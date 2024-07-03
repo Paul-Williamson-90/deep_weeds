@@ -50,16 +50,16 @@ def main():
         image_input_shape=OUTPUT_SIZE,
         input_channels=3,
         resnet_blocks=2,
-        resnet_channels=[24, 48],
+        resnet_channels=[64, 38],
         resnet_kernel_sizes=[5, 3],
         resnet_strides=[1, 1],
         resnet_padding_sizes=[0, 0],
-        resnet_layers=[2, 2],
+        resnet_layers=[1, 2],
         fc1_output_dims=128,
         fc2_output_dims=128,
         pool_kernel_size=2,
         pool_stride=2,
-        dropout=0.2,
+        dropout=0.,
     )
     optimizer = Adam(model.parameters(), lr=LEARNING_RATE)
     loss_fn = nn.CrossEntropyLoss()
