@@ -593,7 +593,15 @@ class SimpleCNN(nn.Module):
     
 
 class ViT(nn.Module):
-    def __init__(self, channels: int = 3, x_dim:int = 255, y_dim:int = 255, n_patches=51, hidden_d=128):
+    def __init__(
+            self, 
+            channels:int = 3, 
+            x_dim:int = 255, 
+            y_dim:int = 255, 
+            n_patches:int = 51, 
+            hidden_d:int = 128, 
+            device:torch.device = torch.device("cpu")
+        ):
         super(ViT, self).__init__()
 
         self.chw = (channels, x_dim, y_dim)
@@ -610,6 +618,8 @@ class ViT(nn.Module):
         self.class_token = nn.Parameter(torch.rand(1, self.hidden_d))
 
         self.register_buffer('positional_embeddings', self._get_positional_embeddings(n_patches ** 2 + 1, hidden_d), persistent=False)
+        self.positional_embeddings.to(device)
+        self.device = device
 
     def forward(self, images):
         n, c, h, w = images.shape
@@ -653,7 +663,19 @@ class ViTTransformer(nn.Module):
             dropout: float = 0.2,
         ):
         super(ViTTransformer, self).__init__()
-        self.vit = ViT(channels=input_channels, x_dim=image_input_shape[0], y_dim=image_input_shape[1], n_patches=n_patches, hidden_d=hidden_d)
+        self.device = torch.device(
+            "cuda" if torch.cuda.is_available() 
+            else "mps" if torch.backends.mps.is_available()
+            else "cpu"
+        )
+        self.vit = ViT(
+            channels=input_channels, 
+            x_dim=image_input_shape[0], 
+            y_dim=image_input_shape[1], 
+            n_patches=n_patches, 
+            hidden_d=hidden_d,
+            device=self.device
+        )
         self.attention = nn.MultiheadAttention(hidden_d, n_heads, dropout=dropout)
         self.dropout = nn.Dropout(dropout)
         self.norm = nn.LayerNorm(hidden_d)
