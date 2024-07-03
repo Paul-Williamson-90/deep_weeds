@@ -13,7 +13,7 @@ from ray.tune.search.optuna import OptunaSearch
 from src.utils import dataset_factory
 from src.trainer import Trainer
 from src.transform import ImageTransform
-from src.model import SimpleCNN, ResNet
+from src.model import SimpleCNN, ResNet, ViTTransformer
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ EPOCHS = 50
 PATIENCE = 5
 BEST_METRIC = "f1"
 MIN_OR_MAX = "max"
-OUTPUT_SIZE = (256, 256)
+OUTPUT_SIZE = (255, 255)
 LOG_LOCATION = f"{CWD}/logs/log.csv"
 
 def load_data(transform, root_dir, csv_file, batch_size):
@@ -71,20 +71,31 @@ def objective(config):
         #     fc1_output_dims=config["fc1_output_dims"],
         #     fc2_output_dims=config["fc2_output_dims"]
         # )
-        model = ResNet(
+        # model = ResNet(
+        #     n_classes=n_classes,
+        #     image_input_shape=OUTPUT_SIZE,
+        #     input_channels=3,
+        #     resnet_blocks=config["resnet_blocks"],
+        #     resnet_channels=[config["resnet_channels"][i] for i in range(config["resnet_blocks"])],
+        #     resnet_kernel_sizes=[config["resnet_kernel_sizes"][i] for i in range(config["resnet_blocks"])],
+        #     resnet_strides=[1 for _ in range(config["resnet_blocks"])],
+        #     resnet_padding_sizes=[0 for _ in range(config["resnet_blocks"])],
+        #     resnet_layers=[config["resnet_layers"][i] for i in range(config["resnet_blocks"])],
+        #     fc1_output_dims=config["fc1_output_dims"],
+        #     fc2_output_dims=config["fc2_output_dims"],
+        #     pool_kernel_size=2,
+        #     pool_stride=2
+        # )
+
+        hidden_d, n_heads = config["hidden_d_num_heads"]
+        model = ViTTransformer(
             n_classes=n_classes,
-            image_input_shape=OUTPUT_SIZE,
             input_channels=3,
-            resnet_blocks=config["resnet_blocks"],
-            resnet_channels=[config["resnet_channels"][i] for i in range(config["resnet_blocks"])],
-            resnet_kernel_sizes=[config["resnet_kernel_sizes"][i] for i in range(config["resnet_blocks"])],
-            resnet_strides=[1 for _ in range(config["resnet_blocks"])],
-            resnet_padding_sizes=[0 for _ in range(config["resnet_blocks"])],
-            resnet_layers=[config["resnet_layers"][i] for i in range(config["resnet_blocks"])],
-            fc1_output_dims=config["fc1_output_dims"],
-            fc2_output_dims=config["fc2_output_dims"],
-            pool_kernel_size=2,
-            pool_stride=2
+            image_input_shape=OUTPUT_SIZE,
+            hidden_d=hidden_d,
+            n_patches=config["n_patches"],
+            n_heads=n_heads,
+            dropout=config["dropout"],
         )
 
         optimizer = Adam(model.parameters(), lr=config["lr"])
@@ -160,17 +171,12 @@ def objective(config):
     #         os.rmdir(save_location)
 
 def main():
-    search_space = { # ResNet
-        "resnet_blocks": tune.choice([1, 2]),
-        "resnet_channels": tune.choice([[6, 12], [12, 24], [24, 48]]),
-        "resnet_kernel_sizes": tune.choice(
-            [
-                  [5, 1],[5, 3],[5, 2], [4, 3], [4, 2], [4, 1], [3, 2], [3, 1], [2, 1], [1, 1], [2, 2], [2, 3], [3, 3]
-            ]
+    search_space = { # ViTTransformer
+        "hidden_d_num_heads": tune.choice(
+            [[64, 8], [128, 8], [256, 8], [512, 8], [64, 16], [128, 16], [256, 16], [512, 16], [64, 32], [128, 32], [256, 32], [512, 32]]
         ),
-        "resnet_layers": tune.choice([[1, 1],[1, 2], [2, 1], [2, 2]]),
-        "fc1_output_dims": tune.choice([64, 128, 256]),
-        "fc2_output_dims": tune.choice([64, 128, 256]),
+        "n_patches": tune.choice([5, 15, 17, 51, 85]),
+        "dropout": tune.uniform(0., 0.5),
         "lr": tune.loguniform(1e-6, 1e-1),
         "batch_size": tune.choice([8, 16, 32]),
         "gradient_accumulation_steps": tune.choice([1, 2, 4, 8]),
@@ -178,6 +184,24 @@ def main():
         "root_dir": tune.choice([f"{CWD}/"]),  
         "csv_file": tune.choice([f"{CWD}/data/labels.csv"]), 
     }
+    # search_space = { # ResNet
+    #     "resnet_blocks": tune.choice([1, 2]),
+    #     "resnet_channels": tune.choice([[6, 12], [12, 24], [24, 48]]),
+    #     "resnet_kernel_sizes": tune.choice(
+    #         [
+    #               [5, 1],[5, 3],[5, 2], [4, 3], [4, 2], [4, 1], [3, 2], [3, 1], [2, 1], [1, 1], [2, 2], [2, 3], [3, 3]
+    #         ]
+    #     ),
+    #     "resnet_layers": tune.choice([[1, 1],[1, 2], [2, 1], [2, 2]]),
+    #     "fc1_output_dims": tune.choice([64, 128, 256]),
+    #     "fc2_output_dims": tune.choice([64, 128, 256]),
+    #     "lr": tune.loguniform(1e-6, 1e-1),
+    #     "batch_size": tune.choice([8, 16, 32]),
+    #     "gradient_accumulation_steps": tune.choice([1, 2, 4, 8]),
+    #     "scheduling_alpha": tune.loguniform(1e-6, 1e-1),
+    #     "root_dir": tune.choice([f"{CWD}/"]),  
+    #     "csv_file": tune.choice([f"{CWD}/data/labels.csv"]), 
+    # }
     # search_space = { # SimpleCNN
     #     "conv1_out_channels": tune.choice([12, 24, 48]),
     #     "conv1_kernel_size": tune.choice([5, 10, 15]),
